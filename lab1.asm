@@ -17,6 +17,8 @@
 ;; 	Placera programmet här
 main:				; Start av programmet
 
+	;GITHUBTEST
+
 	;----STORES ERROR MESSAGE-----------------------------------
 	mov r4,#0x0000		;points to error msg address
 	movt r4,#0x2000
