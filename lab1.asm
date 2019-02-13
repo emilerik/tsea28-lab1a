@@ -1,20 +1,20 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; 
-;; Mall för lab1 i TSEA28 Datorteknik Y
+;; Mall f�r lab1 i TSEA28 Datorteknik Y
 ;;
 ;; 190123 K.Palmkvist
 ;;
 
-	;; Ange att koden är för thumb mode
+	;; Ange att koden �r f�r thumb mode
 	.thumb
 	.text
 	.align 2
 
-	;; Ange att labbkoden startar här efter initiering
+	;; Ange att labbkoden startar h�r efter initiering
 	.global	main
 	
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; 	Placera programmet här
+;; 	Placera programmet h�r
 main:				; Start av programmet
 
 	;GITHUBTEST
@@ -44,27 +44,26 @@ main:				; Start av programmet
 	bl inituart
 	bl initGPIOB
 	bl initGPIOF
+	bl initcode
 	bl deactivatealarm
 
-	;bl endloop4 ;TEST ONE SUBROUTINE
+	;bl endloop6 ;TEST ONE SUBROUTINE
 
 	;----PROGRAM--------------------------------------
 
 alarmOff:
 	bl getkey
-	nop
 	cmp r4,#0xA
 	bne alarmOff
-
 	bl activatealarm
 	b alarmOn
 
 alarmOn:
 	bl getkey
 	cmp r4,#0xF
-	nop
 	beq checkpass
 	bl addkey
+
 	b alarmOn
 
 checkpass:
@@ -78,12 +77,14 @@ checkpass:
 
 correctpass:
 	bl deactivatealarm
+	bl clearinput
 	b alarmOff
 
 incorrectpass:
 	add r6,#1 		;add try to counter
 	bl printstring
 	bl clearinput
+	mov r4,#0xFF
 	b alarmOn
 
 
@@ -201,8 +202,8 @@ initcode:			;sets password in descending order
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Inargument: Pekare till strängen i r4
-; Längd på strängen i r5
+; Inargument: Pekare till str�ngen i r4
+; L�ngd p� str�ngen i r5
 printstring:
 	mov r4,#0x0000		;point to error msg
 	movt r4,#0x2000
@@ -215,32 +216,26 @@ printstringloop:
 	subs r5,r5,#1
 	bne printstringloop
 
-	push {lr}
-	mov r0,r6	;prints counter
-	bl printchar
-	pop {lr}
-
 	bx lr
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Inargument: Inga
 ; Utargument: Inga
 ;
-; Funktion: Tänder grön lysdiod (bit 3 = 1, bit 2 = 0, bit 1 = 0)
+; Funktion: T�nder gr�n lysdiod (bit 3 = 1, bit 2 = 0, bit 1 = 0)
 deactivatealarm:
 
 	mov r1,#(GPIOF_GPIODATA & 0xffff)
 	movt r1,#(GPIOF_GPIODATA >> 16)
 	mov r0,#0x8
 	str r0,[r1]
-	;ldr r0, [r1]
 	bx lr
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Inargument: Inga
 ; Utargument: Inga
 ;
-; Funktion: Tänder röd lysdiod (bit 3 = 0, bit 2 = 0, bit 1 = 1)
+; Funktion: T�nder r�d lysdiod (bit 3 = 0, bit 2 = 0, bit 1 = 1)
 activatealarm:
 ;
 	mov r1,#(GPIOF_GPIODATA & 0xffff)
@@ -254,26 +249,50 @@ activatealarm:
 ; Inargument: Inga
 ; Utargument: Tryckt knappt returneras i r4
 getkey:
-	;TEST KEY, doesn't work?---
-	;mov r0,#0x5E
-	;------------
 
 	mov r1,#(GPIOB_GPIODATA & 0xffff)	 	;get the user key value address 0x400053fc
 	movt r1,#(GPIOB_GPIODATA >> 16)
-	;-----------------
-	;strb r0,[r1] ;TEST, doesn't work?
-	;str
-	;-----------------
-	ldrb r4,[r1]	;put the entered key value from [r1] into r4
 
+	mov r6,#0 								;counter for flashing light
+	mov r7,#(0x150000 & 0xffff)				;counter limit for flashing light
+	movt r7,#(0x150000 >> 16)
+
+	mov r8,#0								;counter for time limited pass
+	mov r9,#(0x4C4B40 & 0xffff)				;counter limit for limited pass
+	movt r9,#(0x4C4B40 >> 16)
+
+waitforpress:
+	add r6,r6,#0x1
+	cmp r6,r7
+	beq toggleLED						;when operation counter reaches a specific value(equal 1s.), change the LED state
+
+	add r8,r8,#0x1
+	cmp r8,r9
+	beq timelimitedpass					;when operation counter reaches a specific value (equal 5s.), active alarm
+	ldrb r0,[r1]
+	and r0,r0,#0x10
+	cmp r0,#0x10
+	bne waitforpress
+
+keypressloop:
+	mov r8,#0
+	ldrb r0,[r1]
+	and r0,r0,#0x10
+	cmp r0,#0x0
+	bne keypressloop
+
+	ldrb r0,[r1]
+	and r0,#0xf
+	mov r4,r0	;put the entered key value from [r1] into r4
 	bx lr
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; Inargument: Vald tangent i r4
 ; Utargument: Inga
 ;
-; Funktion: Flyttar innehållet på 0x20001000-0x20001002 framåt en byte
-; till 0x20001001-0x20001003. Lagrar sedan innehållet i r4 på
+; Funktion: Flyttar inneh�llet p� 0x20001000-0x20001002 fram�t en byte
+; till 0x20001001-0x20001003. Lagrar sedan inneh�llet i r4 p�
 ; adress 0x20001000.
 addkey:
 	;;TEST---------
@@ -303,7 +322,7 @@ addkeyloop:
 ; Inargument: Inga
 ; Utargument: Inga
 ;
-; Funktion: Sätter innehållet på 0x20001000-0x20001003 till 0xFF
+; Funktion: S�tter inneh�llet p� 0x20001000-0x20001003 till 0xFF
 clearinput:
 	mov r0,#0xFF
 	mov r1,#0x1000
@@ -334,8 +353,6 @@ checkcode:
 	push {lr}
 	beq corrkey
 	bne wrongkey
-	pop {lr}
-	bx lr
 
 corrkey:
 	mov r4,#0x1
@@ -345,21 +362,66 @@ wrongkey:
 	mov r4,#0x0
 	bx lr
 
+;----------Extra_SUBRUTINER-----------
+; Inargument: Inga
+; Utargument: Inga
+;
+; Funktion: lysdioden blinkar med en frekvens p� 1 Hz, n�r l�set �r aktiverad.
+toggleLED:
+	mov r6,#0 	;resets LED counter
+
+	;gets alarm state (on or off)
+	mov r2,#(GPIOF_GPIODATA & 0xffff)
+	movt r2,#(GPIOF_GPIODATA >> 16)
+	ldr r0,[r2]
+
+
+	cmp r0,#0x13	;checks if alarm on & LED off
+	beq turnLEDOff
+	cmp r0,#0x11	;checks if alarm on & LED on
+	beq turnLEDOn
+
+	b waitforpress	;go to waitforpress if alarm off.
+
+turnLEDOff:
+	mov r0,#0x0
+	str r0,[r2]
+	b waitforpress
+
+turnLEDOn:
+	mov r0,#0x2
+	str r0,[r2]
+	b waitforpress
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Inargument: r6
+; Utargument: Inga
+;
+; Funktion: l�set ska aktiveras efter 5 sekunder utan knapp tryck (f�rutom A).
+timelimitedpass:
+	mov r2,#(GPIOF_GPIODATA & 0xffff)
+	movt r2,#(GPIOF_GPIODATA >> 16)
+	ldr r0,[r2]
 
+	cmp r0,#0x19
+	beq timelimitedpassloop
+	bx lr
 
+timelimitedpassloop:
+	bl activatealarm
+	b alarmOn
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;,
 ;;;
-;;; Allt här efter ska inte ändras
+;;; Allt h�r efter ska inte �ndras
 ;;;
-;;; Rutiner för initiering
-;;; Se labmanual för vilka namn som ska användas
+;;; Rutiner f�r initiering
+;;; Se labmanual f�r vilka namn som ska anv�ndas
 ;;;
 	
 	.align 4
 
 ;; 	Initiering av seriekommunikation
-;;	Förstör r0, r1
+;;	F�rst�r r0, r1
 	
 inituart:
 	mov r1,#(RCGCUART & 0xffff)		; Koppla in serieport
@@ -373,7 +435,7 @@ inituart:
 	orr r0,r0,#0x01
 	str r0,[r1]		; Koppla in GPIO port A
 
-	nop			; vänta lite
+	nop			; v�nta lite
 	nop
 	nop
 
@@ -385,16 +447,16 @@ inituart:
 	mov r1,#(GPIOA_GPIODEN & 0xffff)
 	movt r1,#(GPIOA_GPIODEN >> 16)
 	mov r0,#0x03
-	str r0,[r1]		; Digital I/O på PA0 och PA1
+	str r0,[r1]		; Digital I/O p� PA0 och PA1
 
 	mov r1,#(UART0_UARTIBRD & 0xffff)
 	movt r1,#(UART0_UARTIBRD >> 16)
 	mov r0,#0x08
-	str r0,[r1]		; Sätt hastighet till 115200 baud
+	str r0,[r1]		; S�tt hastighet till 115200 baud
 	mov r1,#(UART0_UARTFBRD & 0xffff)
 	movt r1,#(UART0_UARTFBRD >> 16)
 	mov r0,#44
-	str r0,[r1]		; Andra värdet för att få 115200 baud
+	str r0,[r1]		; Andra v�rdet f�r att f� 115200 baud
 
 	mov r1,#(UART0_UARTLCRH & 0xffff)
 	movt r1,#(UART0_UARTLCRH >> 16)
@@ -404,11 +466,11 @@ inituart:
 	mov r1,#(UART0_UARTCTL & 0xffff)
 	movt r1,#(UART0_UARTCTL >> 16)
 	mov r0,#0x0301
-	str r0,[r1]		; Börja använda serieport
+	str r0,[r1]		; B�rja anv�nda serieport
 
 	bx  lr
 
-; Definitioner för registeradresser (32-bitars konstanter)
+; Definitioner f�r registeradresser (32-bitars konstanter)
 GPIOHBCTL	.equ	0x400FE06C
 RCGCUART	.equ	0x400FE618
 RCGCGPIO	.equ	0x400fe608
@@ -439,21 +501,21 @@ GPIOF_GPIOAMSEL	.equ	0x40025528
 GPIOF_GPIOPCTL	.equ	0x4002552c
 
 ;; Initiering av port F
-;; Förstör r0, r1, r2
+;; F�rst�r r0, r1, r2
 initGPIOF:
 	mov r1,#(RCGCGPIO & 0xffff)
 	movt r1,#(RCGCGPIO >> 16)
 	ldr r0,[r1]
 	orr r0,r0,#0x20		; Koppla in GPIO port F
 	str r0,[r1]
-	nop 			; Vänta lite
+	nop 			; V�nta lite
 	nop
 	nop
 
-	mov r1,#(GPIOHBCTL & 0xffff)	; Använd apb för GPIO
+	mov r1,#(GPIOHBCTL & 0xffff)	; Anv�nd apb f�r GPIO
 	movt r1,#(GPIOHBCTL >> 16)
 	ldr r0,[r1]
-	mvn r2,#0x2f		; bit 5-0 = 0, övriga = 1 (DET BLIR JU 111...010000??)
+	mvn r2,#0x2f		; bit 5-0 = 0, �vriga = 1 (DET BLIR JU 111...010000??)
 	and r0,r0,r2
 	str r0,[r1]
 
@@ -461,11 +523,11 @@ initGPIOF:
 	movt r1,#(GPIOF_GPIOLOCK >> 16)
 	mov r0,#(GPIOKEY & 0xffff)
 	movt r0,#(GPIOKEY >> 16)
-	str r0,[r1]		; Lås upp port F konfigurationsregister
+	str r0,[r1]		; L�s upp port F konfigurationsregister
 
 	mov r1,#(GPIOF_GPIOCR & 0xffff)
 	movt r1,#(GPIOF_GPIOCR >> 16)
-	mov r0,#0x1f		; tillåt konfigurering av alla bitar i porten
+	mov r0,#0x1f		; till�t konfigurering av alla bitar i porten
 	str r0,[r1]
 
 	mov r1,#(GPIOF_GPIOAMSEL & 0xffff)
@@ -475,22 +537,22 @@ initGPIOF:
 
 	mov r1,#(GPIOF_GPIOPCTL & 0xffff)
 	movt r1,#(GPIOF_GPIOPCTL >> 16)
-	mov r0,#0x00		; använd port F som GPIO
+	mov r0,#0x00		; anv�nd port F som GPIO
 	str r0,[r1]
 
 	mov r1,#(GPIOF_GPIODIR & 0xffff)
 	movt r1,#(GPIOF_GPIODIR >> 16)
-	mov r0,#0x0e		; styr LED (3 bits), andra bitar är ingångar
+	mov r0,#0x0e		; styr LED (3 bits), andra bitar �r ing�ngar
 	str r0,[r1]
 
 	mov r1,#(GPIOF_GPIOAFSEL & 0xffff)
 	movt r1,#(GPIOF_GPIOAFSEL >> 16)
-	mov r0,#0		; alla portens bitar är GPIO
+	mov r0,#0		; alla portens bitar �r GPIO
 	str r0,[r1]
 
 	mov r1,#(GPIOF_GPIOPUR & 0xffff)
 	movt r1,#(GPIOF_GPIOPUR >> 16)
-	mov r0,#0x11		; svag pull-up för tryckknapparna
+	mov r0,#0x11		; svag pull-up f�r tryckknapparna
 	str r0,[r1]
 
 	mov r1,#(GPIOF_GPIODEN & 0xffff)
@@ -502,62 +564,62 @@ initGPIOF:
 
 
 ;; Initiering av port B
-;; Förstör r0, r1
+;; F�rst�r r0, r1
 initGPIOB:
 	mov r1,#(RCGCGPIO & 0xffff)
 	movt r1,#(RCGCGPIO >> 16)
 	ldr r0,[r1]
 	orr r0,r0,#0x02		; koppla in GPIO port B
 	str r0,[r1]
-	nop			; vänta lite
+	nop			; v�nta lite
 	nop
 	nop
 
 	mov r1,#(GPIOB_GPIODIR & 0xffff)
 	movt r1,#(GPIOB_GPIODIR >> 16)
-	mov r0,#0x0		; alla bitar är ingångar
+	mov r0,#0x0		; alla bitar �r ing�ngar
 	str r0,[r1]
 
 	mov r1,#(GPIOB_GPIOAFSEL & 0xffff)
 	movt r1,#(GPIOB_GPIOAFSEL >> 16)
-	mov r0,#0		; alla portens bitar är GPIO
+	mov r0,#0		; alla portens bitar �r GPIO
 	str r0,[r1]
 
 	mov r1,#(GPIOB_GPIOAMSEL & 0xffff)
 	movt r1,#(GPIOB_GPIOAMSEL >> 16)
-	mov r0,#0x00		; använd inte analoga funktioner
+	mov r0,#0x00		; anv�nd inte analoga funktioner
 	str r0,[r1]
 
 	mov r1,#(GPIOB_GPIOPCTL & 0xffff)
 	movt r1,#(GPIOB_GPIOPCTL >> 16)
-	mov r0,#0x00		; använd inga specialfunktioner på port B
+	mov r0,#0x00		; anv�nd inga specialfunktioner p� port B
 	str r0,[r1]
 
 	mov r1,#(GPIOB_GPIOPUR & 0xffff)
 	movt r1,#(GPIOB_GPIOPUR >> 16)
-	mov r0,#0x00		; ingen pullup på port B
+	mov r0,#0x00		; ingen pullup p� port B
 	str r0,[r1]
 
 	mov r1,#(GPIOB_GPIODEN & 0xffff)
 	movt r1,#(GPIOB_GPIODEN >> 16)
-	mov r0,#0xff		; alla pinnar är digital I/O
+	mov r0,#0xff		; alla pinnar �r digital I/O
 	str r0,[r1]
 
 	bx lr
 
 
-;; Utskrift av ett tecken på serieport
-;; r0 innehåller tecken att skriva ut (1 byte)
-;; returnerar först när tecken skickats
-;; förstör r0, r1 och r2
+;; Utskrift av ett tecken p� serieport
+;; r0 inneh�ller tecken att skriva ut (1 byte)
+;; returnerar f�rst n�r tecken skickats
+;; f�rst�r r0, r1 och r2
 printchar:
-	mov r1,#(UART0_UARTFR & 0xffff)	; peka på serieportens statusregister
+	mov r1,#(UART0_UARTFR & 0xffff)	; peka p� serieportens statusregister
 	movt r1,#(UART0_UARTFR >> 16)
 loop1:
-	ldr r2,[r1]			; hämta statusflaggor
+	ldr r2,[r1]			; h�mta statusflaggor
 	ands r2,r2,#0x20		; kan ytterligare tecken skickas?
-	bne loop1			; nej, försök igen
-	mov r1,#(UART0_UARTDR & 0xffff)	; ja, peka på serieportens dataregister
+	bne loop1			; nej, f�rs�k igen
+	mov r1,#(UART0_UARTDR & 0xffff)	; ja, peka p� serieportens dataregister
 	movt r1,#(UART0_UARTDR >> 16)
 	str r0,[r1]			; skicka tecken
 	bx lr
